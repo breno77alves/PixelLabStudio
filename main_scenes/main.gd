@@ -1,6 +1,7 @@
 extends Node2D
 
 const HotkeyBindingUtil = preload("res://autoload/hotkey_binding.gd")
+const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
 
 var editMode = true
 
@@ -106,6 +107,7 @@ var _pan_offset = Vector2.ZERO
 
 var bounceChange = 0.0
 var screen_scale = 1.0
+var _ui_scale = 1.0
 
 #IMPORTANT
 var fileSystemOpen = false
@@ -124,22 +126,8 @@ func _ready():
 	Global.main = self
 	Global.fail = $Failed
 
+	_configure_window_scale()
 	_create_save_load_dialogs()
-
-	screen_scale = DisplayServer.screen_get_scale()
-
-	# DPI-aware UI scale. The project stretch scale (window/stretch/scale=1.5) is a flat
-	# content multiplier tuned for macOS Retina, where it composes with Retina rendering
-	# and the screen_scale-driven window sizing below. screen_get_scale() is macOS-only
-	# (returns 1.0 on Windows/Linux), so off macOS that flat 1.5 was the ONLY scaling
-	# applied and the UI came out oversized (1.5x at 100% display scaling). Off macOS,
-	# drive content_scale_factor from the display's real DPI instead: 96dpi(100%)->1.0,
-	# 120(125%)->1.25, 144(150%)->1.5, etc. NDI output is a separate SubViewport and is
-	# unaffected.
-	if OS.get_name() != "macOS":
-		var _dpi := DisplayServer.screen_get_dpi(DisplayServer.window_get_current_screen())
-		var _ui_scale := clampf(snappedf(float(_dpi) / 96.0, 0.25), 1.0, 3.0)
-		get_window().content_scale_factor = _ui_scale
 
 	Global.connect("startSpeaking",onSpeak)
 
@@ -172,8 +160,7 @@ func _ready():
 		$UILayer/ControlPanel/sensitiveSlider.value = Saving.settings["sense"]
 	_style_control_sliders()
 
-	if Saving.settings.has("windowSize"):
-		get_window().size = str_to_var(Saving.settings["windowSize"])
+	_restore_safe_window_size()
 
 	if Saving.settings.has("bounce"):
 		bounceSlider = Saving.settings["bounce"]
@@ -222,14 +209,6 @@ func _ready():
 
 	saveLoaded = true
 
-	if screen_scale > 1.0:
-		var logical_size = Vector2(get_window().size) / screen_scale
-		if logical_size.x < 1280 or logical_size.y < 720:
-			get_window().size = Vector2i(
-				int(max(logical_size.x, 1280) * screen_scale),
-				int(max(logical_size.y, 720) * screen_scale)
-			)
-
 	RenderingServer.set_default_clear_color(Global.backgroundColor)
 
 	# NDI output (must be before setvalues so settings UI can reference ndi_manager)
@@ -242,6 +221,7 @@ func _ready():
 	var s = get_viewport().get_visible_rect().size
 	origin.position = s*0.5
 	camera.position = origin.position
+	_apply_camera_zoom(s)
 
 	_create_light_gizmo()
 
@@ -253,6 +233,36 @@ func _ready():
 	# Pre-compile the blend-mode shader pipeline during startup so the first time a layer
 	# switches to a screen-reading blend mode there's no one-frame compile hitch.
 	_prewarm_blend_shader()
+
+
+func _configure_window_scale():
+	var current_screen := DisplayServer.window_get_current_screen()
+	if OS.get_name() == "macOS":
+		_ui_scale = maxf(DisplayServer.screen_get_scale(current_screen), 1.0)
+	else:
+		var dpi := DisplayServer.screen_get_dpi(current_screen)
+		_ui_scale = ResponsiveLayoutUtil.display_scale_from_dpi(dpi)
+	screen_scale = _ui_scale
+	get_window().content_scale_factor = _ui_scale
+
+	var usable_rect := DisplayServer.screen_get_usable_rect(current_screen)
+	get_window().min_size = ResponsiveLayoutUtil.native_minimum_size(_ui_scale, usable_rect.size)
+
+
+func _restore_safe_window_size():
+	var saved_size: Variant = Saving.settings.get("windowSize", Vector2i(1280, 720))
+	if saved_size is String:
+		saved_size = str_to_var(saved_size)
+
+	var current_screen := DisplayServer.window_get_current_screen()
+	var usable_rect := DisplayServer.screen_get_usable_rect(current_screen)
+	var safe_size := ResponsiveLayoutUtil.sanitize_window_size(saved_size, _ui_scale, usable_rect)
+	var was_repaired := not (saved_size is Vector2i or saved_size is Vector2) or Vector2i(saved_size) != safe_size
+	get_window().size = safe_size
+	Saving.settings["windowSize"] = var_to_str(safe_size)
+
+	if was_repaired:
+		get_window().position = usable_rect.position + (usable_rect.size - safe_size) / 2
 
 # Render the blend shader once, invisibly, to force Metal to build its pipeline now — the
 # compile otherwise lands on the render thread the first time a backbuffer blend mode draws.
@@ -537,6 +547,7 @@ func onWindowSizeChange():
 	Saving.settings["windowSize"] = var_to_str(get_window().size)
 	var s = get_viewport().get_visible_rect().size
 	origin.position = s*0.5
+	_apply_camera_zoom(s)
 	# Sprites are children of `origin` and would otherwise stretch/glitch when
 	# origin teleports. We don't snap here — _update_resize_state() freezes
 	# sprite _process while the window is mid-resize and force-snaps each
@@ -560,28 +571,31 @@ func zoomScene():
 	if Input.is_action_pressed("control") and not Global.isMouseOverSidebar():
 		if Input.is_action_just_pressed("scrollUp"):
 			if scaleOverall < 400:
-				camera.zoom += Vector2(0.1,0.1)
 				scaleOverall += 10
 				changeZoom()
 		if Input.is_action_just_pressed("scrollDown"):
 			if scaleOverall > 10:
-				camera.zoom -= Vector2(0.1,0.1)
 				scaleOverall -= 10
 				changeZoom()
 	
 	$UILayer/ControlPanel/ZoomLabel.modulate.a = lerp($UILayer/ControlPanel/ZoomLabel.modulate.a,0.0,0.02)
 	
 func changeZoom():
-	# HUD nodes on UILayer (CanvasLayer) don't need zoom compensation, but the
-	# crosshair Lines node is in world space (it draws through the world origin)
-	# and still needs to be scaled inversely so it stays a constant screen size.
-	lines.scale = Vector2(1.0, 1.0) / camera.zoom
+	_apply_camera_zoom(get_viewport().get_visible_rect().size)
 
 	$UILayer/ControlPanel/ZoomLabel.modulate.a = 6.0
 	$UILayer/ControlPanel/ZoomLabel.text = "Zoom : " + str(scaleOverall) + "%"
 	
 	Global.pushUpdate("Set zoom to " + str(scaleOverall) + "%")
 	onWindowSizeChange()
+
+
+func _apply_camera_zoom(viewport_size: Vector2):
+	var composed_zoom := ResponsiveLayoutUtil.camera_zoom(viewport_size, scaleOverall)
+	camera.zoom = Vector2.ONE * composed_zoom
+	# HUD nodes on UILayer (CanvasLayer) do not need compensation. The crosshair
+	# is in world space, so invert the composed zoom to keep it screen-sized.
+	lines.scale = Vector2.ONE / camera.zoom
 	
 #When the user speaks!
 func onSpeak():
