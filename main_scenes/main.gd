@@ -1186,7 +1186,7 @@ func _create_import_dialog():
 func _on_import_button_pressed():
 	if _import_dialog == null:
 		_create_import_dialog()
-	_import_dialog.popup_centered(Vector2i(600, 400))
+	_import_dialog.popup_file_dialog()
 
 func _on_import_files_selected(paths: PackedStringArray):
 	if paths.size() == 0:
@@ -1640,7 +1640,7 @@ func takeScreenshot():
 
 	var timestamp = Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "_")
 	_screenshot_dialog.current_file = "screenshot_" + timestamp + ".png"
-	_screenshot_dialog.popup_centered(Vector2i(600, 400))
+	_screenshot_dialog.popup_file_dialog()
 
 func _create_save_load_dialogs():
 	# OS.get_user_data_dir() resolves the absolute filesystem path that
@@ -1814,7 +1814,7 @@ func _stopRecording():
 
 	var timestamp = Time.get_datetime_string_from_system().replace(":", "").replace("-", "").replace("T", "_")
 	_record_dialog.current_file = "recording_" + timestamp + ext
-	_record_dialog.popup_centered(Vector2i(600, 400))
+	_record_dialog.popup_file_dialog()
 
 func _captureRecordingFrame():
 	if _recording_vp == null or _recording_file == null:
@@ -2396,7 +2396,7 @@ func _create_replace_dialog():
 func _on_replace_button_pressed():
 	if _replace_dialog == null:
 		_create_replace_dialog()
-	_replace_dialog.popup_centered(Vector2i(600, 400))
+	_replace_dialog.popup_file_dialog()
 
 func _on_replace_file_selected(path: String):
 	if path.get_extension().to_lower() == "psd":
