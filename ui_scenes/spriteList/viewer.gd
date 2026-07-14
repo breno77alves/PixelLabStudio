@@ -1,5 +1,7 @@
 extends Node2D
 
+const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
+
 @onready var container = $ScrollContainer/VBoxContainer
 var SpriteListObject = preload("res://ui_scenes/spriteList/sprite_list_object.gd")
 
@@ -12,6 +14,7 @@ var select_tex = preload("res://ui_scenes/spriteEditMenu/layerButtons/select.png
 var layer_textures: Array = []
 
 var panel_width: float = 310
+var _preferred_panel_width: float = 310
 var panel_height: float = 630
 const MIN_WIDTH = 310
 const MAX_WIDTH_RATIO = 0.25
@@ -151,12 +154,8 @@ func _ready():
 
 	# Restore saved sidebar width before the first _apply_size() so all
 	# resizable elements pick up the user's preference on startup.
-	var saved_w = Saving.settings.get("rightSidebarWidth", panel_width)
-	# Floor the max at MIN_WIDTH: at startup the stretched viewport is narrow, so
-	# viewport.x * ratio can fall below MIN_WIDTH, inverting the clamp (min > max) and
-	# collapsing the panel under its minimum until a drag re-clamps it.
-	var max_w = maxf(MIN_WIDTH, get_viewport().get_visible_rect().size.x * MAX_WIDTH_RATIO)
-	panel_width = clamp(saved_w, MIN_WIDTH, max_w)
+	_preferred_panel_width = maxf(float(Saving.settings.get("rightSidebarWidth", panel_width)), MIN_WIDTH)
+	panel_width = _responsive_panel_width(_preferred_panel_width)
 
 	# Restore the active tab before the first layout pass.
 	var saved_tab = clamp(int(Saving.settings.get("rightSidebarTab", 0)), 0, 2)
@@ -582,7 +581,11 @@ func _create_vis_toggle():
 
 func _apply_size():
 	var s = get_viewport().get_visible_rect().size
-	panel_height = s.y
+	if not _dragging:
+		panel_width = _responsive_panel_width(_preferred_panel_width)
+	# The sidebar is positioned below the menu bar. Its local height must end at
+	# the viewport bottom instead of adding the top offset a second time.
+	panel_height = maxf(s.y - maxf(position.y, 0.0), 1.0)
 	_bg.position = Vector2(-4, -4)
 	_bg.size = Vector2(panel_width + 8, panel_height + 8)
 
@@ -1303,9 +1306,8 @@ func _input(event):
 	elif event is InputEventMouseMotion:
 		if _dragging:
 			var delta = get_global_mouse_position() - _drag_start
-			var viewport_width = get_viewport().get_visible_rect().size.x
-			var max_width = maxf(MIN_WIDTH, viewport_width * MAX_WIDTH_RATIO)
-			panel_width = clamp(_drag_start_width - delta.x, MIN_WIDTH, max_width)
+			_preferred_panel_width = maxf(_drag_start_width - delta.x, MIN_WIDTH)
+			panel_width = _responsive_panel_width(_preferred_panel_width)
 			_apply_size()
 			get_viewport().set_input_as_handled()
 		elif _divider_dragging:
@@ -1328,6 +1330,20 @@ func _input(event):
 					Input.set_default_cursor_shape(Input.CURSOR_VSIZE)
 				else:
 					Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
+
+func _responsive_panel_width(requested_width: float) -> float:
+	var opposite_width := float(Saving.settings.get("leftSidebarWidth", 265.0))
+	if Global.spriteEdit != null and is_instance_valid(Global.spriteEdit):
+		opposite_width = Global.spriteEdit.panel_width
+	return ResponsiveLayoutUtil.clamp_panel_width(
+		requested_width,
+		MIN_WIDTH,
+		MAX_WIDTH_RATIO,
+		get_viewport().get_visible_rect().size.x,
+		maxf(opposite_width, 220.0),
+		ResponsiveLayoutUtil.MIN_CENTER_CANVAS_WIDTH
+	)
 
 # --- Layer list data ---
 

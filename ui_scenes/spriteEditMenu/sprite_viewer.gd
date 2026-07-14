@@ -1,5 +1,7 @@
 extends Node2D
 
+const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
+
 #Node Reference
 @onready var spriteRotDisplay = $RotationalLimits/RotBack/SpriteDisplay
 
@@ -11,6 +13,7 @@ var _parent_label: Label
 
 var _bg: ColorRect
 var panel_width: float = 265
+var _preferred_panel_width: float = 265
 var panel_height: float = 630
 # Total vertical extent of laid-out content, set by _layout_panel(). The
 # scroll clamp uses this so the user can always scroll to the actual bottom
@@ -245,9 +248,6 @@ func _ready():
 		$Rotation, $RotationalLimits, $Animation,
 	]
 
-	_set_controls_enabled(false)
-	setImage()
-
 	# Build slider style resources (matching right sidebar)
 	_slider_fill_enabled = StyleBoxFlat.new()
 	_slider_fill_enabled.bg_color = Color(1.0, 0.7, 0.8)
@@ -385,6 +385,11 @@ func _ready():
 	_tab_bar.set_active(_active_left_tab, false)
 	_apply_tab_visibility()
 
+	# Apply the disabled state only after its style resources and all dynamic
+	# controls exist. Calling this earlier passed null theme resources to Godot.
+	_set_controls_enabled(false)
+	setImage()
+
 	# Lay out the panel: sections stack sequentially below the normal-map row,
 	# each section sized to its own content height; dividers fall in the
 	# inter-section gaps automatically.
@@ -402,9 +407,8 @@ func _ready():
 
 	# Restore saved sidebar width before the first _apply_size() so every
 	# resizable element gets sized to the user's preference on startup.
-	var saved_w = Saving.settings.get("leftSidebarWidth", panel_width)
-	var max_w = get_viewport().get_visible_rect().size.x * MAX_PANEL_WIDTH_RATIO
-	panel_width = clamp(saved_w, MIN_PANEL_WIDTH, max_w)
+	_preferred_panel_width = maxf(float(Saving.settings.get("leftSidebarWidth", panel_width)), MIN_PANEL_WIDTH)
+	panel_width = _responsive_panel_width(_preferred_panel_width)
 	_apply_size()
 
 func _set_controls_enabled(enabled: bool):
@@ -712,7 +716,10 @@ func _build_section_vbox(section: Node, pos: Vector2, vbox_width: float, widgets
 	vbox.size = Vector2(vbox_width, 0)  # height auto-fits to children
 	section.add_child(vbox)
 	for w in widgets:
-		w.reparent(vbox)
+		if w.get_parent() == null:
+			vbox.add_child(w)
+		else:
+			w.reparent(vbox)
 		if w is HSlider:
 			w.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_resizables.append([vbox, panel_width - vbox_width])
@@ -732,6 +739,8 @@ func _create_divider(y_pos: float) -> ColorRect:
 
 func _apply_size():
 	var s = get_viewport().get_visible_rect().size
+	if not _resize_dragging:
+		panel_width = _responsive_panel_width(_preferred_panel_width)
 	panel_height = s.y
 	# Clamp bg top to menu bar bottom so it never overlaps the menu bar
 	var menu_bar_bottom = 28  # MENU_BAR_HEIGHT
@@ -808,9 +817,8 @@ func _input(event):
 	if event is InputEventMouseMotion:
 		if _resize_dragging:
 			var delta_x = get_global_mouse_position().x - _resize_drag_start_x
-			var viewport_w = get_viewport().get_visible_rect().size.x
-			var max_w = viewport_w * MAX_PANEL_WIDTH_RATIO
-			panel_width = clamp(_resize_drag_start_width + delta_x, MIN_PANEL_WIDTH, max_w)
+			_preferred_panel_width = maxf(_resize_drag_start_width + delta_x, MIN_PANEL_WIDTH)
+			panel_width = _responsive_panel_width(_preferred_panel_width)
 			_apply_size()
 			get_viewport().set_input_as_handled()
 			return
@@ -853,6 +861,21 @@ func _input(event):
 	var min_y = s.y - content_height
 	position.y = clamp(position.y, min_y, top_y)
 	get_viewport().set_input_as_handled()
+
+
+func _responsive_panel_width(requested_width: float) -> float:
+	var opposite_width := float(Saving.settings.get("rightSidebarWidth", 310.0))
+	if Global.spriteList != null and is_instance_valid(Global.spriteList):
+		opposite_width = Global.spriteList.panel_width
+	return ResponsiveLayoutUtil.clamp_panel_width(
+		requested_width,
+		MIN_PANEL_WIDTH,
+		MAX_PANEL_WIDTH_RATIO,
+		get_viewport().get_visible_rect().size.x,
+		maxf(opposite_width, 310.0),
+		ResponsiveLayoutUtil.MIN_CENTER_CANVAS_WIDTH
+	)
+
 
 func _process(delta):
 	_apply_size()

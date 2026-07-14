@@ -3,6 +3,7 @@ extends RefCounted
 
 const REFERENCE_VIEWPORT := Vector2(1280.0, 720.0)
 const MIN_LOGICAL_WINDOW := Vector2i(960, 540)
+const MIN_CENTER_CANVAS_WIDTH := 360.0
 const DEFAULT_POPUP_MARGIN := 16.0
 
 

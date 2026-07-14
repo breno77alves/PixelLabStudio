@@ -561,6 +561,7 @@ func onWindowSizeChange():
 	# directly, no camera offset needed.
 	controlPanel.position = s  # bottom-right anchor; children use negative offsets
 	tutorial.position = controlPanel.position
+	spriteViewer._apply_size()
 	spriteList.position.y = editControls.MENU_BAR_HEIGHT + 2
 	spriteList._apply_size()
 	pushUpdates.position = Vector2(0, s.y)  # bottom-left anchor
