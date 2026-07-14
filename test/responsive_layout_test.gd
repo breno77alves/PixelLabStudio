@@ -16,6 +16,9 @@ func _initialize() -> void:
 	_test_panel_bounds_never_invert()
 	_test_panels_reserve_supported_center_canvas()
 	_test_popup_is_clamped_inside_viewport()
+	_test_tall_panel_scroll_bounds_cover_both_ends()
+	_test_short_panel_can_anchor_above_bottom_controls()
+	_test_scrollbar_reaches_the_full_panel_range()
 
 	if _failures.is_empty():
 		print("responsive_layout_test: all tests passed")
@@ -101,6 +104,36 @@ func _test_popup_is_clamped_inside_viewport() -> void:
 	)
 	_assert_equal(bounded.position, Vector2(16, 16), "moves an oversized popup into the viewport")
 	_assert_equal(bounded.size, Vector2(928, 508), "shrinks an oversized popup to viewport margins")
+
+
+func _test_tall_panel_scroll_bounds_cover_both_ends() -> void:
+	var bounds := ResponsiveLayout.vertical_panel_bounds(
+		540.0, 540.0, 0.0, 643.0, 16.0, 120.0
+	)
+	_assert_equal(bounds, Vector2(-763.0, -524.0), "a tall panel can scroll from bottom to top")
+
+
+func _test_short_panel_can_anchor_above_bottom_controls() -> void:
+	var bounds := ResponsiveLayout.vertical_panel_bounds(
+		912.0, 912.0, 0.0, 643.0, 16.0, 120.0
+	)
+	_assert_equal(bounds, Vector2(-896.0, -763.0), "a fitting panel exposes its bottom-aligned position")
+	_assert_equal(
+		ResponsiveLayout.panel_fits_vertical_space(643.0, 912.0, 16.0, 120.0),
+		true,
+		"detects when a panel fits between reserved margins"
+	)
+	_assert_equal(
+		ResponsiveLayout.panel_fits_vertical_space(643.0, 540.0, 16.0, 120.0),
+		false,
+		"detects when a panel requires scrolling"
+	)
+
+
+func _test_scrollbar_reaches_the_full_panel_range() -> void:
+	var metrics := ResponsiveLayout.scrollbar_metrics(239.0, 404.0, 643.0)
+	_assert_approx(metrics.y, 150.164856, "scrollbar page represents the visible content fraction")
+	_assert_approx(metrics.x - metrics.y, 239.0, "scrollbar effective maximum reaches the full panel range")
 
 
 func _assert_equal(actual: Variant, expected: Variant, message: String) -> void:

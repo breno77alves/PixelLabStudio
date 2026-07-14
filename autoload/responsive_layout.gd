@@ -87,3 +87,39 @@ static func clamp_popup_rect(
 		clampf(preferred_rect.position.y, safe_margin, maxf(safe_margin, maximum_position.y))
 	)
 	return Rect2(bounded_position, bounded_size)
+
+
+static func vertical_panel_bounds(
+	viewport_height: float,
+	parent_global_y: float,
+	content_top: float,
+	content_height: float,
+	top_margin: float,
+	bottom_margin: float
+) -> Vector2:
+	var top_aligned := maxf(top_margin, 0.0) - parent_global_y - content_top
+	var bottom_aligned := (
+		viewport_height
+		- maxf(bottom_margin, 0.0)
+		- parent_global_y
+		- content_top
+		- maxf(content_height, 0.0)
+	)
+	return Vector2(minf(top_aligned, bottom_aligned), maxf(top_aligned, bottom_aligned))
+
+
+static func panel_fits_vertical_space(
+	content_height: float,
+	viewport_height: float,
+	top_margin: float,
+	bottom_margin: float
+) -> bool:
+	var available_height := maxf(viewport_height - maxf(top_margin, 0.0) - maxf(bottom_margin, 0.0), 0.0)
+	return content_height <= available_height
+
+
+static func scrollbar_metrics(position_range: float, visible_height: float, content_height: float) -> Vector2:
+	var safe_range := maxf(position_range, 0.0)
+	var visible_fraction := clampf(visible_height / maxf(content_height, 1.0), 0.0, 1.0)
+	var page_size := safe_range * visible_fraction
+	return Vector2(safe_range + page_size, page_size)

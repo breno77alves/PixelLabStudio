@@ -1,8 +1,18 @@
 extends Node2D
 
+const ResponsiveLayout = preload("res://autoload/responsive_layout.gd")
+const TOP_MARGIN := 16.0
+const BOTTOM_CONTROLS_MARGIN := 120.0
+const SCROLL_STEP := 48.0
+
 var awaitingCostumeInput = -1
 
 var hasMouse = false
+var _was_visible := false
+var _last_viewport_size := Vector2.ZERO
+var _scrollbar: VScrollBar = null
+var _scroll_bounds := Vector2.ZERO
+var _syncing_scrollbar := false
 
 # NDI UI references (built in code)
 var _ndi_section: Node2D = null
@@ -19,6 +29,15 @@ var _ndi_source_name_input: LineEdit = null
 var _recording_section: Node2D = null
 var _recording_format_option: OptionButton = null
 var _recording_fps_option: OptionButton = null
+
+
+func _ready() -> void:
+	_scrollbar = VScrollBar.new()
+	_scrollbar.name = "SettingsViewportScrollbar"
+	_scrollbar.z_index = z_index
+	_scrollbar.step = 1.0
+	_scrollbar.value_changed.connect(_on_viewport_scrollbar_changed)
+	get_parent().add_child.call_deferred(_scrollbar)
 
 func setvalues():
 	
@@ -221,12 +240,113 @@ func _on_costume_check_toggled(button_pressed):
 	Saving.settings["bounceOnCostumeChange"] = button_pressed
 
 
-func _process(delta):
-	var g = to_local(get_global_mouse_position())
-	if g.x < 0 or g.y < 0 or g.x > $NinePatchRect.size.x or g.y > $NinePatchRect.size.y:
-		hasMouse = false
+func _process(_delta):
+	var viewport_size := get_viewport().get_visible_rect().size
+	var opened_now := visible and not _was_visible
+	var resized_while_open := visible and viewport_size != _last_viewport_size
+
+	if visible:
+		_apply_viewport_constraints(opened_now or resized_while_open)
+		hasMouse = _visible_panel_rect(viewport_size).has_point(get_global_mouse_position())
+		_scroll_from_input_actions()
 	else:
-		hasMouse = true
+		hasMouse = false
+		if _scrollbar != null:
+			_scrollbar.visible = false
+
+	_was_visible = visible
+	_last_viewport_size = viewport_size
+
+
+func _scroll_from_input_actions() -> void:
+	if not hasMouse:
+		return
+	if $CostumeInputs/ScrollContainer.get_global_rect().has_point(get_global_mouse_position()):
+		return
+
+	if Input.is_action_just_pressed("scrollUp"):
+		position.y += SCROLL_STEP
+	elif Input.is_action_just_pressed("scrollDown"):
+		position.y -= SCROLL_STEP
+	else:
+		return
+	_apply_viewport_constraints(false)
+
+
+func _apply_viewport_constraints(prefer_primary_settings: bool) -> void:
+	var viewport_size := get_viewport().get_visible_rect().size
+	var panel := $NinePatchRect
+	var parent_global_y: float = (get_parent() as Node2D).global_position.y
+	var bounds := ResponsiveLayout.vertical_panel_bounds(
+		viewport_size.y,
+		parent_global_y,
+		panel.position.y,
+		panel.size.y,
+		TOP_MARGIN,
+		BOTTOM_CONTROLS_MARGIN
+	)
+	var top_aligned_y: float = TOP_MARGIN - parent_global_y - panel.position.y
+	var bottom_aligned_y: float = (
+		viewport_size.y
+		- BOTTOM_CONTROLS_MARGIN
+		- parent_global_y
+		- panel.position.y
+		- panel.size.y
+	)
+	var panel_fits := ResponsiveLayout.panel_fits_vertical_space(
+		panel.size.y, viewport_size.y, TOP_MARGIN, BOTTOM_CONTROLS_MARGIN
+	)
+
+	if prefer_primary_settings:
+		position.y = bottom_aligned_y if panel_fits else top_aligned_y
+	else:
+		position.y = clampf(position.y, bounds.x, bounds.y)
+
+	_update_scrollbar(viewport_size, bounds, panel_fits)
+
+
+func _update_scrollbar(viewport_size: Vector2, bounds: Vector2, panel_fits: bool) -> void:
+	if _scrollbar == null or not is_instance_valid(_scrollbar):
+		return
+
+	_scroll_bounds = bounds
+	_scrollbar.visible = visible and not panel_fits
+	if not _scrollbar.visible:
+		return
+
+	var panel := $NinePatchRect
+	var parent_node := get_parent() as Node2D
+	var available_height := maxf(viewport_size.y - TOP_MARGIN - BOTTOM_CONTROLS_MARGIN, 1.0)
+	_scrollbar.position = Vector2(
+		position.x + panel.position.x + panel.size.x - 12.0,
+		TOP_MARGIN - parent_node.global_position.y
+	)
+	_scrollbar.size = Vector2(12.0, available_height)
+	var scroll_range := maxf(bounds.y - bounds.x, 1.0)
+	var metrics := ResponsiveLayout.scrollbar_metrics(scroll_range, available_height, panel.size.y)
+	_scrollbar.min_value = 0.0
+	_scrollbar.max_value = metrics.x
+	_scrollbar.page = metrics.y
+
+	_syncing_scrollbar = true
+	_scrollbar.value = clampf(bounds.y - position.y, 0.0, scroll_range)
+	_syncing_scrollbar = false
+
+
+func _on_viewport_scrollbar_changed(value: float) -> void:
+	if _syncing_scrollbar or not visible:
+		return
+	position.y = clampf(_scroll_bounds.y - value, _scroll_bounds.x, _scroll_bounds.y)
+
+
+func _visible_panel_rect(viewport_size: Vector2) -> Rect2:
+	var panel_rect := Rect2(global_position + $NinePatchRect.position, $NinePatchRect.size)
+	var usable_height := maxf(viewport_size.y - TOP_MARGIN - BOTTOM_CONTROLS_MARGIN, 1.0)
+	var usable_rect := Rect2(
+		Vector2(0.0, TOP_MARGIN),
+		Vector2(viewport_size.x, usable_height)
+	)
+	return panel_rect.intersection(usable_rect)
 
 func deleteKey(label,id):
 	Global.main.costumeKeys[id-1] = "null"
