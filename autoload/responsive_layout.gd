@@ -123,3 +123,9 @@ static func scrollbar_metrics(position_range: float, visible_height: float, cont
 	var visible_fraction := clampf(visible_height / maxf(content_height, 1.0), 0.0, 1.0)
 	var page_size := safe_range * visible_fraction
 	return Vector2(safe_range + page_size, page_size)
+
+
+static func world_modal_scale(camera_zoom: Vector2) -> Vector2:
+	if is_zero_approx(camera_zoom.x) or is_zero_approx(camera_zoom.y):
+		return Vector2.ONE
+	return Vector2(1.0 / camera_zoom.x, 1.0 / camera_zoom.y)

@@ -445,6 +445,7 @@ func _process(delta):
 	_process_session_save(delta)
 	_process_recording(delta)
 	panCamera()
+	_fit_active_world_modals()
 	followShadow()
 
 	# NDI status indicator
@@ -461,6 +462,24 @@ func _unhandled_input(event):
 
 func panCamera():
 	camera.position = origin.position + _pan_offset
+
+
+func _fit_active_world_modals() -> void:
+	var stable_scale := ResponsiveLayoutUtil.world_modal_scale(camera.zoom)
+	_fit_world_modal(psdImportDialog, stable_scale)
+	_fit_world_modal(replaceReviewDialog, stable_scale)
+	_fit_world_modal(_psd_progress_dialog, stable_scale)
+	_fit_world_modal(_import_progress_dialog2, stable_scale)
+	_fit_world_modal(_anim_progress_dialog, stable_scale)
+	_fit_world_modal(_encode_progress_dialog, stable_scale)
+	_fit_world_modal(_single_replace_dialog, stable_scale)
+
+
+func _fit_world_modal(candidate: Node2D, stable_scale: Vector2) -> void:
+	if candidate == null or not is_instance_valid(candidate) or not candidate.visible:
+		return
+	candidate.position = camera.position
+	candidate.scale = stable_scale
 
 func followShadow():
 	shadow.visible = is_instance_valid(Global.heldSprite)

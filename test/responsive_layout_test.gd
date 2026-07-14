@@ -19,6 +19,7 @@ func _initialize() -> void:
 	_test_tall_panel_scroll_bounds_cover_both_ends()
 	_test_short_panel_can_anchor_above_bottom_controls()
 	_test_scrollbar_reaches_the_full_panel_range()
+	_test_world_modal_cancels_camera_zoom()
 
 	if _failures.is_empty():
 		print("responsive_layout_test: all tests passed")
@@ -134,6 +135,19 @@ func _test_scrollbar_reaches_the_full_panel_range() -> void:
 	var metrics := ResponsiveLayout.scrollbar_metrics(239.0, 404.0, 643.0)
 	_assert_approx(metrics.y, 150.164856, "scrollbar page represents the visible content fraction")
 	_assert_approx(metrics.x - metrics.y, 239.0, "scrollbar effective maximum reaches the full panel range")
+
+
+func _test_world_modal_cancels_camera_zoom() -> void:
+	_assert_equal(
+		ResponsiveLayout.world_modal_scale(Vector2(0.75, 1.5)),
+		Vector2(1.3333334, 0.6666667),
+		"world-space modals keep a stable screen size"
+	)
+	_assert_equal(
+		ResponsiveLayout.world_modal_scale(Vector2.ZERO),
+		Vector2.ONE,
+		"world-space modal scale remains finite during transient zero zoom"
+	)
 
 
 func _assert_equal(actual: Variant, expected: Variant, message: String) -> void:
