@@ -67,6 +67,7 @@ var settings = {
 	"leftSidebarWidth":265,
 	"rightSidebarWidth":310,
 	"wigglePresets":{},
+	"sceneTemplates":[],
 }
 
 var settingsPath = "user://settings.pngtp"
