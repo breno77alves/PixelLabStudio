@@ -2,6 +2,7 @@ extends Node2D
 
 const HotkeyBindingUtil = preload("res://autoload/hotkey_binding.gd")
 const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
+const SceneTemplateUtil = preload("res://autoload/scene_template.gd")
 
 var editMode = true
 
@@ -608,6 +609,26 @@ func changeZoom():
 	
 	Global.pushUpdate("Set zoom to " + str(scaleOverall) + "%")
 	onWindowSizeChange()
+
+
+func apply_scene_template(template: Dictionary) -> bool:
+	var normalized := SceneTemplateUtil.normalize(template, get_window().min_size)
+	if normalized.is_empty():
+		return false
+
+	scaleOverall = int(normalized["zoom"])
+	get_window().size = SceneTemplateUtil.window_size(normalized)
+	Saving.settings["windowSize"] = var_to_str(get_window().size)
+	Saving.write_settings(Saving.settingsPath)
+	call_deferred("_finish_scene_template_apply")
+	return true
+
+
+func _finish_scene_template_apply() -> void:
+	onWindowSizeChange()
+	$UILayer/ControlPanel/ZoomLabel.text = "Zoom : " + str(scaleOverall) + "%"
+	$UILayer/ControlPanel/ZoomLabel.modulate.a = 6.0
+	Saving.write_settings(Saving.settingsPath)
 
 
 func _apply_camera_zoom(viewport_size: Vector2):
