@@ -15,30 +15,30 @@
 
 ### Phase 1: Data contract
 
-- [ ] Add failing tests for normalization, overwrite, limits, and deletion.
-- [ ] Implement the pure helper and a backward-compatible settings default.
+- [x] Add failing tests for normalization, overwrite, limits, and deletion.
+- [x] Implement the pure helper and a backward-compatible settings default.
 
 ### Checkpoint: Data contract
 
-- [ ] New unit suite passes.
-- [ ] Existing settings files with no template key still load.
+- [x] New unit suite passes.
+- [x] Existing settings files with no template key still load.
 
 ### Phase 2: Runtime and UI
 
-- [ ] Add one runtime method that applies validated size and zoom.
-- [ ] Add template selection, exact numeric fields, save/apply/delete actions,
+- [x] Add one runtime method that applies validated size and zoom.
+- [x] Add template selection, exact numeric fields, save/apply/delete actions,
       and clear empty/error states to Settings.
 
 ### Checkpoint: User flow
 
-- [ ] Saving, overwriting, applying, and deleting work end to end.
-- [ ] Settings panel remains scrollable at its minimum supported window size.
+- [x] Saving, overwriting, applying, and deleting work end to end.
+- [x] Settings panel remains scrollable at its minimum supported window size.
 
 ### Phase 3: Release
 
-- [ ] Run template, responsive layout, and hotkey tests.
-- [ ] Review correctness, readability, architecture, security, and performance.
-- [ ] Export the portable Windows build and update the test ZIP.
+- [x] Run template, responsive layout, and hotkey tests.
+- [x] Review correctness, readability, architecture, security, and performance.
+- [x] Export the portable Windows build and update the test ZIP.
 - [ ] Commit and push the feature branch.
 
 ## Risks and Mitigations

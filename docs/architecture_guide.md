@@ -244,6 +244,10 @@ Sprites live under `OriginMotion/Origin` in the scene tree and use the `"saved"`
 - File extension: `.pngtp`
 - PNG encoding for file saves runs on a background thread to avoid stalling the main loop (Updated: 2026-02-16)
 - Settings stored separately: volume, sensitivity, window size, background color, costume key bindings, etc.
+- `sceneTemplates` stores up to 20 ordered OBS scene presets. Each entry contains
+  a name, native window width/height, and user zoom percentage; applying one
+  routes through `main.gd` so the responsive resize and camera composition stay
+  synchronized.
 - Web build support via localStorage
 
 ### PSD Import (`psd_parser.gd`)
