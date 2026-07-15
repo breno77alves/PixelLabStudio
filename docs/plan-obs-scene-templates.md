@@ -39,7 +39,7 @@
 - [x] Run template, responsive layout, and hotkey tests.
 - [x] Review correctness, readability, architecture, security, and performance.
 - [x] Export the portable Windows build and update the test ZIP.
-- [ ] Commit and push the feature branch.
+- [x] Commit and push the feature branch.
 
 ## Risks and Mitigations
 
