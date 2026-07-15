@@ -1,6 +1,7 @@
 extends Node2D
 
 const ResponsiveLayout = preload("res://autoload/responsive_layout.gd")
+const SceneTemplateUtil = preload("res://autoload/scene_template.gd")
 const TOP_MARGIN := 16.0
 const BOTTOM_CONTROLS_MARGIN := 120.0
 const SCROLL_STEP := 48.0
@@ -29,6 +30,17 @@ var _ndi_source_name_input: LineEdit = null
 var _recording_section: Node2D = null
 var _recording_format_option: OptionButton = null
 var _recording_fps_option: OptionButton = null
+
+# OBS scene template UI references (built in code)
+var _scene_template_section: Node2D = null
+var _scene_template_option: OptionButton = null
+var _scene_template_name: LineEdit = null
+var _scene_template_width: SpinBox = null
+var _scene_template_height: SpinBox = null
+var _scene_template_zoom: SpinBox = null
+var _scene_template_apply: Button = null
+var _scene_template_delete: Button = null
+var _syncing_scene_template_ui := false
 
 
 func _ready() -> void:
@@ -71,6 +83,8 @@ func setvalues():
 	_update_ndi_ui()
 	_build_recording_section()
 	_update_recording_ui()
+	_build_scene_template_section()
+	_update_scene_template_ui()
 
 	# Right-click resets each slider to its factory default
 	Global.make_slider_resettable($MaxFPS/fpsDrag, 60)
@@ -723,3 +737,247 @@ func _on_recording_fps_selected(idx: int):
 	if idx < fps_values.size():
 		Saving.settings["recordingFPS"] = fps_values[idx]
 		Global.pushUpdate("Recording FPS set to " + str(fps_values[idx]) + ".")
+
+
+# --- OBS Scene Templates ---
+
+func _build_scene_template_section() -> void:
+	if _scene_template_section != null:
+		return
+
+	$NinePatchRect.offset_bottom += 180
+	position.y -= 180
+
+	_scene_template_section = Node2D.new()
+	_scene_template_section.name = "SceneTemplates"
+	_scene_template_section.position = Vector2(22, 625)
+	add_child(_scene_template_section)
+
+	var separator := ColorRect.new()
+	separator.position = Vector2(-4, 0)
+	separator.size = Vector2(380, 2)
+	separator.color = Color(0.5, 0.5, 0.5, 0.4)
+	separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_scene_template_section.add_child(separator)
+
+	var title := Label.new()
+	title.position = Vector2(0, 6)
+	title.text = "OBS Scene Templates"
+	title.add_theme_font_size_override("font_size", 14)
+	_scene_template_section.add_child(title)
+
+	var use_current := Button.new()
+	use_current.position = Vector2(267, 4)
+	use_current.size = Vector2(98, 26)
+	use_current.text = "Use current"
+	use_current.tooltip_text = "Copy the current window size and avatar zoom"
+	use_current.pressed.connect(_on_scene_template_use_current_pressed)
+	_scene_template_section.add_child(use_current)
+
+	_scene_template_option = OptionButton.new()
+	_scene_template_option.position = Vector2(0, 36)
+	_scene_template_option.size = Vector2(190, 28)
+	_scene_template_option.tooltip_text = "Saved templates"
+	_scene_template_option.item_selected.connect(_on_scene_template_selected)
+	_scene_template_section.add_child(_scene_template_option)
+
+	_scene_template_apply = Button.new()
+	_scene_template_apply.position = Vector2(198, 36)
+	_scene_template_apply.size = Vector2(78, 28)
+	_scene_template_apply.text = "Apply"
+	_scene_template_apply.tooltip_text = "Apply this window size and zoom"
+	_scene_template_apply.pressed.connect(_on_scene_template_apply_pressed)
+	_scene_template_section.add_child(_scene_template_apply)
+
+	_scene_template_delete = Button.new()
+	_scene_template_delete.position = Vector2(284, 36)
+	_scene_template_delete.size = Vector2(81, 28)
+	_scene_template_delete.text = "Delete"
+	_scene_template_delete.tooltip_text = "Delete the selected template"
+	_scene_template_delete.pressed.connect(_on_scene_template_delete_pressed)
+	_scene_template_section.add_child(_scene_template_delete)
+
+	_scene_template_name = LineEdit.new()
+	_scene_template_name.position = Vector2(0, 72)
+	_scene_template_name.size = Vector2(220, 28)
+	_scene_template_name.max_length = SceneTemplateUtil.MAX_NAME_LENGTH
+	_scene_template_name.placeholder_text = "Template name (for example: Gameplay)"
+	_scene_template_name.tooltip_text = "Saving the same name updates that template"
+	_scene_template_name.text_submitted.connect(_on_scene_template_name_submitted)
+	_scene_template_section.add_child(_scene_template_name)
+
+	var save_button := Button.new()
+	save_button.position = Vector2(228, 72)
+	save_button.size = Vector2(137, 28)
+	save_button.text = "Save template"
+	save_button.pressed.connect(_on_scene_template_save_pressed)
+	_scene_template_section.add_child(save_button)
+
+	var width_label := Label.new()
+	width_label.position = Vector2(0, 110)
+	width_label.text = "W"
+	_scene_template_section.add_child(width_label)
+
+	_scene_template_width = SpinBox.new()
+	_scene_template_width.position = Vector2(20, 106)
+	_scene_template_width.size = Vector2(92, 28)
+	_scene_template_width.min_value = get_window().min_size.x
+	_scene_template_width.max_value = SceneTemplateUtil.MAX_SIZE.x
+	_scene_template_width.step = 1
+	_scene_template_width.suffix = " px"
+	_scene_template_width.tooltip_text = "Native window width captured by OBS"
+	_scene_template_section.add_child(_scene_template_width)
+
+	var height_label := Label.new()
+	height_label.position = Vector2(122, 110)
+	height_label.text = "H"
+	_scene_template_section.add_child(height_label)
+
+	_scene_template_height = SpinBox.new()
+	_scene_template_height.position = Vector2(142, 106)
+	_scene_template_height.size = Vector2(92, 28)
+	_scene_template_height.min_value = get_window().min_size.y
+	_scene_template_height.max_value = SceneTemplateUtil.MAX_SIZE.y
+	_scene_template_height.step = 1
+	_scene_template_height.suffix = " px"
+	_scene_template_height.tooltip_text = "Native window height captured by OBS"
+	_scene_template_section.add_child(_scene_template_height)
+
+	var zoom_label := Label.new()
+	zoom_label.position = Vector2(244, 110)
+	zoom_label.text = "Zoom"
+	_scene_template_section.add_child(zoom_label)
+
+	_scene_template_zoom = SpinBox.new()
+	_scene_template_zoom.position = Vector2(288, 106)
+	_scene_template_zoom.size = Vector2(77, 28)
+	_scene_template_zoom.min_value = SceneTemplateUtil.MIN_ZOOM
+	_scene_template_zoom.max_value = SceneTemplateUtil.MAX_ZOOM
+	_scene_template_zoom.step = 10
+	_scene_template_zoom.suffix = "%"
+	_scene_template_zoom.tooltip_text = "Avatar zoom percentage"
+	_scene_template_section.add_child(_scene_template_zoom)
+
+	var helper := Label.new()
+	helper.position = Vector2(0, 140)
+	helper.text = "Tip: create one template for each OBS scene."
+	helper.add_theme_font_size_override("font_size", 11)
+	helper.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	_scene_template_section.add_child(helper)
+
+
+func _update_scene_template_ui(selected_index: int = -1) -> void:
+	if _scene_template_option == null:
+		return
+
+	var templates := SceneTemplateUtil.normalize_list(
+		Saving.settings.get("sceneTemplates", []), get_window().min_size
+	)
+	Saving.settings["sceneTemplates"] = templates
+
+	_syncing_scene_template_ui = true
+	_scene_template_option.clear()
+	for template in templates:
+		_scene_template_option.add_item(str(template["name"]))
+
+	var has_templates := not templates.is_empty()
+	_scene_template_option.disabled = not has_templates
+	_scene_template_apply.disabled = not has_templates
+	_scene_template_delete.disabled = not has_templates
+	if not has_templates:
+		_scene_template_option.add_item("No templates saved")
+		_scene_template_option.selected = 0
+		_scene_template_name.clear()
+		_set_scene_template_fields_from_current()
+	else:
+		var safe_index := selected_index
+		if safe_index < 0:
+			safe_index = clampi(_scene_template_option.selected, 0, templates.size() - 1)
+		safe_index = clampi(safe_index, 0, templates.size() - 1)
+		_scene_template_option.selected = safe_index
+		_load_scene_template_fields(templates[safe_index])
+	_syncing_scene_template_ui = false
+
+
+func _load_scene_template_fields(template: Dictionary) -> void:
+	_scene_template_name.text = str(template["name"])
+	_scene_template_width.value = int(template["width"])
+	_scene_template_height.value = int(template["height"])
+	_scene_template_zoom.value = int(template["zoom"])
+
+
+func _set_scene_template_fields_from_current() -> void:
+	_scene_template_width.value = get_window().size.x
+	_scene_template_height.value = get_window().size.y
+	_scene_template_zoom.value = Global.main.scaleOverall
+
+
+func _on_scene_template_selected(index: int) -> void:
+	if _syncing_scene_template_ui:
+		return
+	var templates := Saving.settings.get("sceneTemplates", []) as Array
+	if index >= 0 and index < templates.size():
+		_load_scene_template_fields(templates[index])
+
+
+func _on_scene_template_use_current_pressed() -> void:
+	_set_scene_template_fields_from_current()
+	Global.pushUpdate("Copied the current window size and zoom.")
+
+
+func _on_scene_template_name_submitted(_new_text: String) -> void:
+	_on_scene_template_save_pressed()
+	_scene_template_name.release_focus()
+
+
+func _on_scene_template_save_pressed() -> void:
+	var result := SceneTemplateUtil.upsert(
+		Saving.settings.get("sceneTemplates", []),
+		{
+			"name": _scene_template_name.text,
+			"width": int(_scene_template_width.value),
+			"height": int(_scene_template_height.value),
+			"zoom": int(_scene_template_zoom.value),
+		},
+		get_window().min_size
+	)
+	if result["error"] == "invalid":
+		Global.pushUpdate("Enter a name before saving the OBS scene template.")
+		_scene_template_name.grab_focus()
+		return
+	if result["error"] == "limit":
+		Global.pushUpdate("OBS scene template limit reached (20).")
+		return
+
+	Saving.settings["sceneTemplates"] = result["templates"]
+	Saving.write_settings(Saving.settingsPath)
+	_update_scene_template_ui(int(result["index"]))
+	Global.pushUpdate("Saved OBS scene template \"" + _scene_template_name.text + "\".")
+
+
+func _on_scene_template_apply_pressed() -> void:
+	var templates := Saving.settings.get("sceneTemplates", []) as Array
+	var index := _scene_template_option.selected
+	if index < 0 or index >= templates.size():
+		return
+	var template := templates[index] as Dictionary
+	if Global.main.apply_scene_template(template):
+		Global.pushUpdate(
+			"Applied OBS scene template \"%s\" (%dx%d, %d%%)." % [
+				template["name"], template["width"], template["height"], template["zoom"]
+			]
+		)
+
+
+func _on_scene_template_delete_pressed() -> void:
+	var templates := Saving.settings.get("sceneTemplates", []) as Array
+	var index := _scene_template_option.selected
+	if index < 0 or index >= templates.size():
+		return
+	var deleted_name := str(templates[index].get("name", ""))
+	Saving.settings["sceneTemplates"] = SceneTemplateUtil.remove_at(
+		templates, index, get_window().min_size
+	)
+	Saving.write_settings(Saving.settingsPath)
+	_update_scene_template_ui(mini(index, Saving.settings["sceneTemplates"].size() - 1))
+	Global.pushUpdate("Deleted OBS scene template \"" + deleted_name + "\".")
