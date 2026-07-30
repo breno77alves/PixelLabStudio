@@ -13,8 +13,8 @@ owning process is alive. Stale reservations left by crashes are reclaimed.
 ## Tech Stack
 
 - Godot 4.6.1 and GDScript.
-- Native process IDs from `OS.get_process_id()` and liveness checks from
-  `OS.is_process_running()`.
+- Native process IDs from `OS.get_process_id()` and a lifetime-owned file
+  handle for cross-process liveness on Windows.
 - Atomic directory renames under `user://instance_locks` for cross-process
   slot reservation.
 - Native title through the main `Window.title` property.

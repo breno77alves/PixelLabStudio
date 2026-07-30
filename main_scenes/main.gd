@@ -1,6 +1,7 @@
 extends Node2D
 
 const HotkeyBindingUtil = preload("res://autoload/hotkey_binding.gd")
+const InstanceIdentityUtil = preload("res://autoload/instance_identity.gd")
 const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
 const SceneTemplateUtil = preload("res://autoload/scene_template.gd")
 
@@ -60,6 +61,8 @@ var _encode_progress: float = 0.0
 var _encode_progress_dialog: Node2D = null
 var _encode_progress_path: String = ""
 var _encode_total_frames: int = 0
+
+var _instance_identity: InstanceIdentity = null
 
 
 #Scene Reference
@@ -127,6 +130,7 @@ func _ready():
 	Global.main = self
 	Global.fail = $Failed
 
+	_configure_instance_identity()
 	_configure_window_scale()
 	_create_save_load_dialogs()
 
@@ -234,6 +238,31 @@ func _ready():
 	# Pre-compile the blend-mode shader pipeline during startup so the first time a layer
 	# switches to a screen-reading blend mode there's no one-frame compile hitch.
 	_prewarm_blend_shader()
+
+
+func _exit_tree() -> void:
+	if _instance_identity != null:
+		_instance_identity.release()
+
+
+func _configure_instance_identity() -> void:
+	if OS.has_feature("web"):
+		return
+
+	_instance_identity = InstanceIdentityUtil.new()
+	_instance_identity.claim()
+	var base_title := str(
+		ProjectSettings.get_setting("application/config/name", "PixelLab Studio")
+	)
+	var unique_title := _instance_identity.title(base_title)
+	get_window().title = unique_title
+	print(
+		"INSTANCE_TITLE|pid=%d|slot=%d|title=%s" % [
+			_instance_identity.process_id,
+			_instance_identity.instance_number,
+			unique_title,
+		]
+	)
 
 
 func _configure_window_scale():

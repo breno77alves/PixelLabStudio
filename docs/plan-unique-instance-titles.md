@@ -16,30 +16,30 @@
 
 ### Phase 1: Contract and tests
 
-- [ ] Add tests for title formatting and lock lifecycle.
-- [ ] Confirm the tests fail before the manager exists.
+- [x] Add tests for title formatting and lock lifecycle.
+- [x] Confirm the tests fail before the manager exists.
 
 ### Phase 2: Implementation
 
-- [ ] Implement atomic claim, stale recovery, ownership validation, and release.
-- [ ] Integrate claim/title/release into the main scene lifecycle.
+- [x] Implement atomic claim, stale recovery, ownership validation, and release.
+- [x] Integrate claim/title/release into the main scene lifecycle.
 
 ### Checkpoint
 
-- [ ] New tests pass.
-- [ ] Existing hotkey, responsive-layout, and scene-template tests pass.
+- [x] New tests pass.
+- [x] Existing hotkey, responsive-layout, and scene-template tests pass.
 
 ### Phase 3: Windows verification
 
-- [ ] Export a separate test package.
-- [ ] Launch multiple instances and confirm distinct logged/native titles.
+- [x] Export a separate test package.
+- [x] Launch multiple instances and confirm distinct logged/native titles.
 - [ ] Review correctness, readability, architecture, security, and performance.
 - [ ] Commit, package, and push only the isolated feature branch.
 
 ## Risks and Mitigations
 
 - Simultaneous startup: atomic directory rename decides the winner.
-- Crash between temporary lock creation and claim: PID-named candidates are
-  cleaned on the next startup when their owner is no longer alive.
-- PID reuse: lock ownership is checked again before release; active processes
-  are never reclaimed.
+- Crash between temporary lock creation and claim: old candidates are probed
+  and cleaned on the next startup.
+- Process visibility: each owner keeps its file handle open for its lifetime,
+  so correctness does not depend on sibling-process visibility.
