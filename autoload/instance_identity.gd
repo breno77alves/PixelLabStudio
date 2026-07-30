@@ -3,7 +3,9 @@ extends RefCounted
 
 const MAX_INSTANCES := 99
 const OWNER_FILE := "owner.pid"
+const PROBE_FILE := "owner.probe"
 const DEFAULT_LOCK_ROOT := "user://instance_locks"
+const FRESH_LOCK_SECONDS := 5
 
 var instance_number := 0
 var process_id := 0
@@ -11,6 +13,7 @@ var process_id := 0
 var _lock_root_virtual: String
 var _lock_root_absolute: String
 var _lock_path := ""
+var _owner_handle: FileAccess = null
 
 
 func _init(lock_root: String = DEFAULT_LOCK_ROOT) -> void:
@@ -41,6 +44,13 @@ func claim(max_instances: int = MAX_INSTANCES) -> int:
 			_remove_lock_directory(slot_path)
 
 		if DirAccess.rename_absolute(candidate_path, slot_path) == OK:
+			_owner_handle = FileAccess.open(
+				slot_path.path_join(OWNER_FILE),
+				FileAccess.READ_WRITE
+			)
+			if _owner_handle == null:
+				_remove_lock_directory(slot_path)
+				return 0
 			instance_number = slot
 			_lock_path = slot_path
 			return instance_number
@@ -50,6 +60,9 @@ func claim(max_instances: int = MAX_INSTANCES) -> int:
 
 
 func release() -> void:
+	if _owner_handle != null:
+		_owner_handle.close()
+		_owner_handle = null
 	if instance_number <= 0 or _lock_path.is_empty():
 		return
 	if _read_owner(_lock_path) == process_id:
@@ -108,7 +121,26 @@ func _cleanup_stale_candidates() -> void:
 
 func _lock_is_stale(lock_path: String) -> bool:
 	var owner_pid := _read_owner(lock_path)
-	return owner_pid <= 0 or not OS.is_process_running(owner_pid)
+	if owner_pid <= 0:
+		return true
+
+	var owner_path := lock_path.path_join(OWNER_FILE)
+	var modified_at := FileAccess.get_modified_time(owner_path)
+	var current_time := int(Time.get_unix_time_from_system())
+	if modified_at > 0 and current_time - modified_at < FRESH_LOCK_SECONDS:
+		return false
+
+	# OS.is_process_running() cannot reliably see sibling application
+	# processes on Windows. The owner keeps this file open for its entire
+	# lifetime instead. Windows refuses this rename while that handle exists;
+	# after a clean exit or crash, the handle closes and the stale slot can be
+	# reclaimed.
+	var probe_path := lock_path.path_join(PROBE_FILE)
+	DirAccess.remove_absolute(probe_path)
+	if DirAccess.rename_absolute(owner_path, probe_path) != OK:
+		return false
+	DirAccess.rename_absolute(probe_path, owner_path)
+	return true
 
 
 func _read_owner(lock_path: String) -> int:
@@ -129,4 +161,5 @@ func _slot_path(slot: int) -> String:
 
 func _remove_lock_directory(lock_path: String) -> void:
 	DirAccess.remove_absolute(lock_path.path_join(OWNER_FILE))
+	DirAccess.remove_absolute(lock_path.path_join(PROBE_FILE))
 	DirAccess.remove_absolute(lock_path)

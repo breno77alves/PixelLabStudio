@@ -16,6 +16,7 @@ func _initialize() -> void:
 	_test_concurrent_managers_claim_distinct_slots()
 	_test_released_slot_is_reused_without_renumbering_live_instances()
 	_test_stale_process_lock_is_reclaimed()
+	_test_live_owner_handle_blocks_stale_probe()
 
 	_cleanup_root(_test_root)
 	_cleanup_root(_stale_root)
@@ -83,6 +84,17 @@ func _test_stale_process_lock_is_reclaimed() -> void:
 	identity.release()
 
 
+func _test_live_owner_handle_blocks_stale_probe() -> void:
+	var first := InstanceIdentity.new(_test_root)
+	var second := InstanceIdentity.new(_test_root)
+
+	_assert_equal(first.claim(), 1, "first manager holds its owner file open")
+	_assert_equal(second.claim(), 2, "an open owner file cannot be reclaimed")
+
+	first.release()
+	second.release()
+
+
 func _cleanup_root(virtual_root: String) -> void:
 	var absolute_root := ProjectSettings.globalize_path(virtual_root)
 	var directory := DirAccess.open(absolute_root)
@@ -95,6 +107,7 @@ func _cleanup_root(virtual_root: String) -> void:
 		if directory.current_is_dir() and child_name != "." and child_name != "..":
 			var child_path := absolute_root.path_join(child_name)
 			DirAccess.remove_absolute(child_path.path_join("owner.pid"))
+			DirAccess.remove_absolute(child_path.path_join("owner.probe"))
 			DirAccess.remove_absolute(child_path)
 		child_name = directory.get_next()
 	directory.list_dir_end()
