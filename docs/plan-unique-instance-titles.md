@@ -34,7 +34,7 @@
 - [x] Export a separate test package.
 - [x] Launch multiple instances and confirm distinct logged/native titles.
 - [x] Review correctness, readability, architecture, security, and performance.
-- [ ] Commit, package, and push only the isolated feature branch.
+- [x] Commit, package, and push only the isolated feature branch.
 
 ## Risks and Mitigations
 
