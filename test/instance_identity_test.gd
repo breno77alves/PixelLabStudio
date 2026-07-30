@@ -13,6 +13,7 @@ func _initialize() -> void:
 	_stale_root = _test_root + "_stale"
 
 	_test_formats_numbered_and_fallback_titles()
+	_test_formats_stable_automation_title()
 	_test_concurrent_managers_claim_distinct_slots()
 	_test_released_slot_is_reused_without_renumbering_live_instances()
 	_test_stale_process_lock_is_reclaimed()
@@ -42,6 +43,17 @@ func _test_formats_numbered_and_fallback_titles() -> void:
 		"PixelLab Studio — Process 4321",
 		"formats a unique fallback title"
 	)
+
+
+func _test_formats_stable_automation_title() -> void:
+	var identity := InstanceIdentity.new(_test_root)
+	_assert_equal(identity.claim(), 1, "claims a slot before formatting a stable title")
+	_assert_equal(
+		identity.title("PixelLab Studio", "Corpo_base"),
+		"PixelLab Studio — Corpo_base",
+		"automation label replaces the unstable numbered title"
+	)
+	identity.release()
 
 
 func _test_concurrent_managers_claim_distinct_slots() -> void:

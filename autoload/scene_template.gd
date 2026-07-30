@@ -83,6 +83,18 @@ static func window_size(entry: Dictionary) -> Vector2i:
 	return Vector2i(int(entry.get("width", 1280)), int(entry.get("height", 720)))
 
 
+static func find_by_name(
+	entries: Variant,
+	name: String,
+	minimum_size: Vector2i = DEFAULT_MIN_SIZE
+) -> Dictionary:
+	var normalized_entries := normalize_list(entries, minimum_size)
+	var index := _find_name(normalized_entries, name.strip_edges())
+	if index < 0:
+		return {}
+	return normalized_entries[index]
+
+
 static func _find_name(entries: Array, name: String) -> int:
 	var folded_name := name.to_lower()
 	for index in range(entries.size()):

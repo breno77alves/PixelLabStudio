@@ -71,7 +71,9 @@ func release() -> void:
 	_lock_path = ""
 
 
-func title(base_title: String) -> String:
+func title(base_title: String, stable_label: String = "") -> String:
+	if not stable_label.strip_edges().is_empty():
+		return "%s — %s" % [base_title, stable_label.strip_edges()]
 	if instance_number > 0:
 		return title_for_slot(base_title, instance_number)
 	return title_for_pid(base_title, process_id)

@@ -12,6 +12,7 @@ func _initialize() -> void:
 	_test_rejects_a_new_template_past_the_limit()
 	_test_filters_corrupted_saved_entries()
 	_test_deletes_only_the_selected_template()
+	_test_finds_a_template_by_case_insensitive_name()
 
 	if _failures.is_empty():
 		print("scene_template_test: all tests passed")
@@ -90,6 +91,23 @@ func _test_deletes_only_the_selected_template() -> void:
 	var remaining := SceneTemplate.remove_at(templates, 0)
 	_assert_equal(remaining.size(), 1, "removes one template")
 	_assert_equal(remaining[0]["name"], "Chat", "keeps the other template")
+
+
+func _test_finds_a_template_by_case_insensitive_name() -> void:
+	var templates := [
+		{"name": "Gravacao", "width": 1856, "height": 1184, "zoom": 80},
+		{"name": "CorpoGravacao", "width": 1856, "height": 1184, "zoom": 40},
+	]
+	_assert_equal(
+		SceneTemplate.find_by_name(templates, "corpogravacao")["zoom"],
+		40,
+		"finds the saved template requested by a batch child"
+	)
+	_assert_equal(
+		SceneTemplate.find_by_name(templates, "missing"),
+		{},
+		"returns an empty dictionary for a missing template"
+	)
 
 
 func _assert_equal(actual: Variant, expected: Variant, message: String) -> void:

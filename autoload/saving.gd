@@ -1,6 +1,7 @@
 extends Node
 
 var key = "creature"
+var settings_write_enabled := true
 
 var data = {}
 
@@ -111,8 +112,17 @@ func write_save(path):
 		file.store_line(JSON.stringify(data))
 		file.close()
 
+func set_settings_write_enabled(enabled: bool) -> void:
+	settings_write_enabled = enabled
+
+
 func write_settings(path):
+	if not settings_write_enabled:
+		return
 	var file = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("Could not write settings at: " + path)
+		return
 	file.store_line(JSON.stringify(settings))
 	file.close()
 

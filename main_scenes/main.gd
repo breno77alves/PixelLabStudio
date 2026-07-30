@@ -1,5 +1,6 @@
 extends Node2D
 
+const BatchLauncherUtil = preload("res://autoload/batch_launcher.gd")
 const HotkeyBindingUtil = preload("res://autoload/hotkey_binding.gd")
 const InstanceIdentityUtil = preload("res://autoload/instance_identity.gd")
 const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
@@ -63,6 +64,8 @@ var _encode_progress_path: String = ""
 var _encode_total_frames: int = 0
 
 var _instance_identity: InstanceIdentity = null
+var _batch_arguments: Dictionary = {}
+var _read_only_session := false
 
 
 #Scene Reference
@@ -130,6 +133,11 @@ func _ready():
 	Global.main = self
 	Global.fail = $Failed
 
+	_batch_arguments = BatchLauncherUtil.parse_arguments(OS.get_cmdline_user_args())
+	_read_only_session = bool(_batch_arguments.get("read_only_session", false))
+	if _read_only_session:
+		Saving.set_settings_write_enabled(false)
+
 	_configure_instance_identity()
 	_configure_window_scale()
 	_create_save_load_dialogs()
@@ -153,10 +161,12 @@ func _ready():
 	# (UndoManager.save_state is gated on saveLoaded, so any state captures
 	# during load itself are no-ops.)
 	var last_avatar_path = Saving.settings.get("lastAvatar", "")
-	if _has_recoverable_session(last_avatar_path):
-		_show_session_recovery_dialog(last_avatar_path)
-	elif last_avatar_path != "":
-		_on_load_dialog_file_selected(last_avatar_path)
+	var has_batch_avatar := not str(_batch_arguments.get("avatar_path", "")).is_empty()
+	if not has_batch_avatar and not bool(_batch_arguments.get("batch_launcher", false)):
+		if _has_recoverable_session(last_avatar_path):
+			_show_session_recovery_dialog(last_avatar_path)
+		elif last_avatar_path != "":
+			_on_load_dialog_file_selected(last_avatar_path)
 	Saving.settings["newUser"] = false
 
 	if Saving.settings.has("volume"):
@@ -239,6 +249,9 @@ func _ready():
 	# switches to a screen-reading blend mode there's no one-frame compile hitch.
 	_prewarm_blend_shader()
 
+	if has_batch_avatar:
+		call_deferred("_run_batch_avatar_request")
+
 
 func _exit_tree() -> void:
 	if _instance_identity != null:
@@ -249,12 +262,17 @@ func _configure_instance_identity() -> void:
 	if OS.has_feature("web"):
 		return
 
-	_instance_identity = InstanceIdentityUtil.new()
-	_instance_identity.claim()
 	var base_title := str(
 		ProjectSettings.get_setting("application/config/name", "PixelLab Studio")
 	)
-	var unique_title := _instance_identity.title(base_title)
+	if bool(_batch_arguments.get("batch_launcher", false)):
+		get_window().title = base_title + " — Batch Launcher"
+		return
+
+	_instance_identity = InstanceIdentityUtil.new()
+	_instance_identity.claim()
+	var stable_label := str(_batch_arguments.get("window_label", ""))
+	var unique_title := _instance_identity.title(base_title, stable_label)
 	get_window().title = unique_title
 	print(
 		"INSTANCE_TITLE|pid=%d|slot=%d|title=%s" % [
@@ -263,6 +281,37 @@ func _configure_instance_identity() -> void:
 			unique_title,
 		]
 	)
+
+
+func _run_batch_avatar_request() -> void:
+	var avatar_path := str(_batch_arguments.get("avatar_path", ""))
+	var template_name := str(_batch_arguments.get("template_name", ""))
+	if avatar_path.get_extension().to_lower() != "save" or not FileAccess.file_exists(avatar_path):
+		Global.pushUpdate("Batch avatar file not found: " + avatar_path)
+		return
+
+	var template := SceneTemplateUtil.find_by_name(
+		Saving.settings.get("sceneTemplates", []),
+		template_name,
+		get_window().min_size
+	)
+	if template.is_empty():
+		Global.pushUpdate('Batch template not found: "' + template_name + '"')
+		return
+	if not apply_scene_template(template, false):
+		Global.pushUpdate('Could not apply batch template: "' + template_name + '"')
+		return
+
+	await get_tree().process_frame
+	var loaded := await _on_load_dialog_file_selected(avatar_path, false)
+	if loaded:
+		print(
+			"BATCH_READY|avatar=%s|template=%s|title=%s" % [
+				avatar_path,
+				template_name,
+				get_window().title,
+			]
+		)
 
 
 func _configure_window_scale():
@@ -640,24 +689,26 @@ func changeZoom():
 	onWindowSizeChange()
 
 
-func apply_scene_template(template: Dictionary) -> bool:
+func apply_scene_template(template: Dictionary, persist_settings: bool = true) -> bool:
 	var normalized := SceneTemplateUtil.normalize(template, get_window().min_size)
 	if normalized.is_empty():
 		return false
 
 	scaleOverall = int(normalized["zoom"])
 	get_window().size = SceneTemplateUtil.window_size(normalized)
-	Saving.settings["windowSize"] = var_to_str(get_window().size)
-	Saving.write_settings(Saving.settingsPath)
-	call_deferred("_finish_scene_template_apply")
+	if persist_settings:
+		Saving.settings["windowSize"] = var_to_str(get_window().size)
+		Saving.write_settings(Saving.settingsPath)
+	call_deferred("_finish_scene_template_apply", persist_settings)
 	return true
 
 
-func _finish_scene_template_apply() -> void:
+func _finish_scene_template_apply(persist_settings: bool = true) -> void:
 	onWindowSizeChange()
 	$UILayer/ControlPanel/ZoomLabel.text = "Zoom : " + str(scaleOverall) + "%"
 	$UILayer/ControlPanel/ZoomLabel.modulate.a = 6.0
-	Saving.write_settings(Saving.settingsPath)
+	if persist_settings:
+		Saving.write_settings(Saving.settingsPath)
 
 
 func _apply_camera_zoom(viewport_size: Vector2):
@@ -1334,12 +1385,13 @@ func _on_load_button_pressed():
 	loadDialog.popup_file_dialog()
 
 #LOAD AVATAR
-func _on_load_dialog_file_selected(path):
-	UndoManager.save_state()
+func _on_load_dialog_file_selected(path, remember_as_last_avatar: bool = true) -> bool:
+	if remember_as_last_avatar:
+		UndoManager.save_state()
 	var data = Saving.read_save(path)
 
 	if data == null:
-		return
+		return false
 
 	Global.heldSprite = null
 	# Hide the old avatar immediately so it doesn't linger on screen during load
@@ -1557,7 +1609,7 @@ func _on_load_dialog_file_selected(path):
 	# The session-recovery file is ephemeral — never promote it to lastAvatar,
 	# otherwise startup auto-load and Reset would pull from it instead of the
 	# user's actual saved avatar.
-	if path != SESSION_SAVE_PATH:
+	if remember_as_last_avatar and path != SESSION_SAVE_PATH:
 		Saving.settings["lastAvatar"] = path
 		# Persist immediately — _exit_tree isn't reliable across all shutdown paths
 		Saving.write_settings(Saving.settingsPath)
@@ -1603,6 +1655,7 @@ func _on_load_dialog_file_selected(path):
 	origin.visible = true
 	var fade = create_tween()
 	fade.tween_property(origin, "modulate", Color(1, 1, 1, 1), 0.3)
+	return true
 
 func _create_save_progress_dialog() -> Node2D:
 	return _create_progress_dialog("Saving avatar...")
@@ -2243,6 +2296,8 @@ func _on_undo_state_saved():
 # dirty, and no save (manual or session) is in flight. When the interval
 # elapses, kick off a background encode + write to SESSION_SAVE_PATH.
 func _process_session_save(delta):
+	if _read_only_session:
+		return
 	# Reap a finished thread first so we can start a new tick.
 	if _session_thread != null and !_session_thread.is_alive():
 		_session_thread.wait_to_finish()
@@ -2282,6 +2337,8 @@ func _session_save_worker(data: Dictionary):
 	file.close()
 
 func _discard_session_file():
+	if _read_only_session:
+		return
 	if !FileAccess.file_exists(SESSION_SAVE_PATH):
 		return
 	var dir = DirAccess.open("user://")
