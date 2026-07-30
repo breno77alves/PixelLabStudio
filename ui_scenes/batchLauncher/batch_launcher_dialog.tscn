@@ -1,0 +1,212 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://ui_scenes/batchLauncher/batch_launcher_dialog.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StylePanel"]
+bg_color = Color(0.105, 0.125, 0.135, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.36, 0.38, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="BatchLauncherDialog" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.025, 0.035, 0.04, 1)
+mouse_filter = 0
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="Margin"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StylePanel")
+
+[node name="ContentMargin" type="MarginContainer" parent="Margin/Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+
+[node name="Content" type="VBoxContainer" parent="Margin/Panel/ContentMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Margin/Panel/ContentMargin/Content/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+text = "Batch Avatar Launcher"
+
+[node name="CloseButton" type="Button" parent="Margin/Panel/ContentMargin/Content/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Close"
+
+[node name="FolderRow" type="HBoxContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FolderLabel" type="Label" parent="Margin/Panel/ContentMargin/Content/FolderRow"]
+layout_mode = 2
+text = "Folder"
+
+[node name="FolderEdit" type="LineEdit" parent="Margin/Panel/ContentMargin/Content/FolderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Folder containing .save avatars"
+
+[node name="BrowseButton" type="Button" parent="Margin/Panel/ContentMargin/Content/FolderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Browse"
+
+[node name="RescanButton" type="Button" parent="Margin/Panel/ContentMargin/Content/FolderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rescan"
+
+[node name="RulesHeader" type="HBoxContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+
+[node name="RulesTitle" type="Label" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "Prefix → OBS template rules"
+
+[node name="DelayLabel" type="Label" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
+layout_mode = 2
+text = "Launch interval"
+
+[node name="DelaySpin" type="SpinBox" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+min_value = 0.25
+max_value = 10.0
+step = 0.25
+suffix = " s"
+
+[node name="AddRuleButton" type="Button" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add rule"
+
+[node name="RulesScroll" type="ScrollContainer" parent="Margin/Panel/ContentMargin/Content"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="RulesList" type="VBoxContainer" parent="Margin/Panel/ContentMargin/Content/RulesScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="FilesHeader" type="HBoxContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+
+[node name="FilesTitle" type="Label" parent="Margin/Panel/ContentMargin/Content/FilesHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 15
+text = "Avatar files"
+
+[node name="SelectAllButton" type="Button" parent="Margin/Panel/ContentMargin/Content/FilesHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Select valid"
+
+[node name="ClearButton" type="Button" parent="Margin/Panel/ContentMargin/Content/FilesHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clear"
+
+[node name="FilesPanel" type="PanelContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="FilesMargin" type="MarginContainer" parent="Margin/Panel/ContentMargin/Content/FilesPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="FilesStack" type="VBoxContainer" parent="Margin/Panel/ContentMargin/Content/FilesPanel/FilesMargin"]
+layout_mode = 2
+
+[node name="EmptyLabel" type="Label" parent="Margin/Panel/ContentMargin/Content/FilesPanel/FilesMargin/FilesStack"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "No .save files found in this folder."
+horizontal_alignment = 1
+
+[node name="FilesScroll" type="ScrollContainer" parent="Margin/Panel/ContentMargin/Content/FilesPanel/FilesMargin/FilesStack"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="FilesList" type="VBoxContainer" parent="Margin/Panel/ContentMargin/Content/FilesPanel/FilesMargin/FilesStack/FilesScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="Footer" type="HBoxContainer" parent="Margin/Panel/ContentMargin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatusLabel" type="Label" parent="Margin/Panel/ContentMargin/Content/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Ready"
+
+[node name="LaunchButton" type="Button" parent="Margin/Panel/ContentMargin/Content/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 36)
+layout_mode = 2
+text = "Open selected"
+
+[node name="FolderDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose avatar folder"
+size = Vector2i(900, 600)
+file_mode = 2
+access = 2
+use_native_dialog = true

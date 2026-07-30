@@ -745,8 +745,8 @@ func _build_scene_template_section() -> void:
 	if _scene_template_section != null:
 		return
 
-	$NinePatchRect.offset_bottom += 180
-	position.y -= 180
+	$NinePatchRect.offset_bottom += 230
+	position.y -= 230
 
 	_scene_template_section = Node2D.new()
 	_scene_template_section.name = "SceneTemplates"
@@ -858,12 +858,26 @@ func _build_scene_template_section() -> void:
 	_scene_template_zoom.tooltip_text = "Avatar zoom percentage"
 	_scene_template_section.add_child(_scene_template_zoom)
 
+	var launcher_button := Button.new()
+	launcher_button.position = Vector2(0, 140)
+	launcher_button.size = Vector2(365, 32)
+	launcher_button.text = "Open batch avatar launcher"
+	launcher_button.tooltip_text = "Select several avatars and apply OBS templates automatically"
+	launcher_button.pressed.connect(_on_batch_launcher_pressed)
+	_scene_template_section.add_child(launcher_button)
+
 	var helper := Label.new()
-	helper.position = Vector2(0, 140)
+	helper.position = Vector2(0, 180)
 	helper.text = "Tip: create one template for each OBS scene."
 	helper.add_theme_font_size_override("font_size", 11)
 	helper.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
 	_scene_template_section.add_child(helper)
+
+
+func _on_batch_launcher_pressed() -> void:
+	var pid := OS.create_instance(PackedStringArray(["--", "--batch-launcher"]))
+	if pid < 0:
+		Global.pushUpdate("Could not open the batch avatar launcher.")
 
 
 func _update_scene_template_ui(selected_index: int = -1) -> void:

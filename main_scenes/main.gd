@@ -1,6 +1,9 @@
 extends Node2D
 
 const BatchLauncherUtil = preload("res://autoload/batch_launcher.gd")
+const BatchLauncherDialogScene = preload(
+	"res://ui_scenes/batchLauncher/batch_launcher_dialog.tscn"
+)
 const HotkeyBindingUtil = preload("res://autoload/hotkey_binding.gd")
 const InstanceIdentityUtil = preload("res://autoload/instance_identity.gd")
 const ResponsiveLayoutUtil = preload("res://autoload/responsive_layout.gd")
@@ -134,7 +137,10 @@ func _ready():
 	Global.fail = $Failed
 
 	_batch_arguments = BatchLauncherUtil.parse_arguments(OS.get_cmdline_user_args())
-	_read_only_session = bool(_batch_arguments.get("read_only_session", false))
+	_read_only_session = (
+		bool(_batch_arguments.get("read_only_session", false))
+		or bool(_batch_arguments.get("batch_launcher", false))
+	)
 	if _read_only_session:
 		Saving.set_settings_write_enabled(false)
 
@@ -251,6 +257,8 @@ func _ready():
 
 	if has_batch_avatar:
 		call_deferred("_run_batch_avatar_request")
+	elif bool(_batch_arguments.get("batch_launcher", false)):
+		call_deferred("_show_batch_launcher")
 
 
 func _exit_tree() -> void:
@@ -312,6 +320,25 @@ func _run_batch_avatar_request() -> void:
 				get_window().title,
 			]
 		)
+
+
+func _show_batch_launcher() -> void:
+	get_window().size = Vector2i(1100, 720)
+	origin.visible = false
+	for hud_node in [
+		controlPanel,
+		editControls,
+		tutorial,
+		viewerArrows,
+		lines,
+		pushUpdates,
+		shadow,
+		$Failed,
+		$UILayer/MouseCursor,
+	]:
+		hud_node.visible = false
+	var launcher := BatchLauncherDialogScene.instantiate()
+	$UILayer.add_child(launcher)
 
 
 func _configure_window_scale():
