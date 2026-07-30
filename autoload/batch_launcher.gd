@@ -1,12 +1,15 @@
 class_name BatchLauncher
 extends RefCounted
 
-const CONFIG_VERSION := 1
+const CONFIG_VERSION := 2
 const CONFIG_PATH := "user://batch_launcher.json"
 const DEFAULT_FOLDER := "H:/AI/Projetos/Youtube/Sprites/ALL"
 const DEFAULT_LAUNCH_DELAY_MS := 2000
 const MIN_LAUNCH_DELAY_MS := 250
 const MAX_LAUNCH_DELAY_MS := 10000
+const DEFAULT_STARTUP_TIMEOUT_MS := 120000
+const MIN_STARTUP_TIMEOUT_MS := 10000
+const MAX_STARTUP_TIMEOUT_MS := 600000
 const MAX_RULES := 64
 const MAX_LABEL_LENGTH := 80
 
@@ -18,6 +21,7 @@ static func default_config() -> Dictionary:
 		"selected": [],
 		"known_files": [],
 		"launch_delay_ms": DEFAULT_LAUNCH_DELAY_MS,
+		"startup_timeout_ms": DEFAULT_STARTUP_TIMEOUT_MS,
 		"rules": [
 			{"prefix": "Busto", "template": "Gravacao"},
 			{"prefix": "Corpo", "template": "CorpoGravacao"},
@@ -31,6 +35,7 @@ static func parse_arguments(arguments: PackedStringArray) -> Dictionary:
 		"avatar_path": "",
 		"template_name": "",
 		"window_label": "",
+		"ready_file_path": "",
 		"read_only_session": false,
 	}
 	for raw_argument in arguments:
@@ -45,6 +50,10 @@ static func parse_arguments(arguments: PackedStringArray) -> Dictionary:
 			parsed["template_name"] = _argument_value(argument, "--template=")
 		elif argument.begins_with("--window-label="):
 			parsed["window_label"] = _argument_value(argument, "--window-label=")
+		elif argument.begins_with("--batch-ready-file="):
+			parsed["ready_file_path"] = _argument_value(
+				argument, "--batch-ready-file="
+			)
 	return parsed
 
 
@@ -64,6 +73,14 @@ static func normalize_config(raw_config: Variant) -> Dictionary:
 		),
 		MIN_LAUNCH_DELAY_MS,
 		MAX_LAUNCH_DELAY_MS
+	)
+	normalized["startup_timeout_ms"] = clampi(
+		_as_int(
+			raw_config.get("startup_timeout_ms", DEFAULT_STARTUP_TIMEOUT_MS),
+			DEFAULT_STARTUP_TIMEOUT_MS
+		),
+		MIN_STARTUP_TIMEOUT_MS,
+		MAX_STARTUP_TIMEOUT_MS
 	)
 	normalized["selected"] = _normalize_string_list(raw_config.get("selected", []))
 	normalized["known_files"] = _normalize_string_list(
@@ -183,6 +200,54 @@ static func label_for_path(path: String) -> String:
 	label = label.replace("\r", " ").replace("\n", " ").replace("\t", " ")
 	label = label.strip_edges().substr(0, MAX_LABEL_LENGTH)
 	return label if not label.is_empty() else "Avatar"
+
+
+static func child_arguments(
+	entry: Dictionary, ready_file_path: String, log_file_path: String
+) -> PackedStringArray:
+	return PackedStringArray([
+		"--log-file",
+		log_file_path,
+		"--",
+		"--avatar=" + str(entry.get("path", "")),
+		"--template=" + str(entry.get("template_name", "")),
+		"--window-label=" + str(entry.get("label", "")),
+		"--batch-ready-file=" + ready_file_path,
+		"--read-only-session",
+	])
+
+
+static func write_ready_marker(path: String, payload: Dictionary) -> Error:
+	if not _is_ready_marker_path_allowed(path):
+		return ERR_INVALID_PARAMETER
+
+	var parent_directory := path.get_base_dir()
+	var directory_error := DirAccess.make_dir_recursive_absolute(parent_directory)
+	if directory_error != OK:
+		return directory_error
+
+	var temporary_path := path + ".tmp"
+	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	file.store_line(JSON.stringify(payload))
+	file.close()
+
+	DirAccess.remove_absolute(path)
+	var publish_error := DirAccess.rename_absolute(temporary_path, path)
+	if publish_error != OK:
+		DirAccess.remove_absolute(temporary_path)
+	return publish_error
+
+
+static func _is_ready_marker_path_allowed(path: String) -> bool:
+	if not path.is_absolute_path() or path.get_extension().to_lower() != "ready":
+		return false
+	var normalized_path := path.replace("\\", "/").simplify_path().to_lower()
+	var batch_root := ProjectSettings.globalize_path(
+		"user://batch_runs"
+	).replace("\\", "/").simplify_path().to_lower()
+	return normalized_path.begins_with(batch_root + "/")
 
 
 static func selected_names(entries: Array) -> Array:

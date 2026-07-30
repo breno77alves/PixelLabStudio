@@ -2,6 +2,8 @@ extends Control
 
 const BatchLauncherUtil = preload("res://autoload/batch_launcher.gd")
 const SceneTemplateUtil = preload("res://autoload/scene_template.gd")
+const READY_POLL_SECONDS := 0.25
+const PROCESS_EXIT_GRACE_MS := 3000
 
 @onready var folder_edit: LineEdit = %FolderEdit
 @onready var delay_spin: SpinBox = %DelaySpin
@@ -263,20 +265,41 @@ func _on_launch_pressed() -> void:
 	_launching = true
 	launch_button.disabled = true
 	var failures: Array[String] = []
+	var run_directory := _create_run_directory()
+	if run_directory.is_empty():
+		_launching = false
+		launch_button.disabled = false
+		status_label.text = "Could not create the batch diagnostics folder."
+		return
+
 	for index in range(requests.size()):
 		var entry: Dictionary = requests[index]
 		status_label.text = "Starting %d of %d: %s" % [
 			index + 1, requests.size(), entry["file_name"]
 		]
-		var arguments := PackedStringArray([
-			"--",
-			"--avatar=" + str(entry["path"]),
-			"--template=" + str(entry["template_name"]),
-			"--window-label=" + str(entry["label"]),
-			"--read-only-session",
-		])
-		if OS.create_instance(arguments) < 0:
-			failures.append(str(entry["file_name"]))
+		var ready_file_path := run_directory.path_join(
+			"%03d.ready" % (index + 1)
+		)
+		var log_file_path := run_directory.path_join(
+			"%03d-%s.log" % [index + 1, str(entry["label"])]
+		)
+		var arguments := BatchLauncherUtil.child_arguments(
+			entry, ready_file_path, log_file_path
+		)
+		var process_id := OS.create_instance(arguments)
+		if process_id < 0:
+			failures.append("%s (could not start)" % entry["file_name"])
+			continue
+
+		var failure_reason := await _wait_for_child_ready(
+			process_id,
+			ready_file_path,
+			entry,
+			index,
+			requests.size()
+		)
+		if not failure_reason.is_empty():
+			failures.append("%s (%s)" % [entry["file_name"], failure_reason])
 		if index < requests.size() - 1:
 			await get_tree().create_timer(float(_config["launch_delay_ms"]) / 1000.0).timeout
 
@@ -285,4 +308,53 @@ func _on_launch_pressed() -> void:
 		return
 	_launching = false
 	launch_button.disabled = false
-	status_label.text = "Could not start: " + ", ".join(failures)
+	status_label.text = "Batch incomplete: " + ", ".join(failures)
+
+
+func _create_run_directory() -> String:
+	var directory := ProjectSettings.globalize_path(
+		"user://batch_runs/run_%d_%d" % [
+			OS.get_process_id(), Time.get_ticks_usec()
+		]
+	)
+	if DirAccess.make_dir_recursive_absolute(directory) != OK:
+		return ""
+	return directory
+
+
+func _wait_for_child_ready(
+	process_id: int,
+	ready_file_path: String,
+	entry: Dictionary,
+	index: int,
+	total: int
+) -> String:
+	var started_at := Time.get_ticks_msec()
+	var timeout_ms := int(_config.get(
+		"startup_timeout_ms",
+		BatchLauncherUtil.DEFAULT_STARTUP_TIMEOUT_MS
+	))
+	var missing_process_polls := 0
+
+	while Time.get_ticks_msec() - started_at < timeout_ms:
+		if FileAccess.file_exists(ready_file_path):
+			return ""
+
+		var elapsed_ms := Time.get_ticks_msec() - started_at
+		if elapsed_ms >= PROCESS_EXIT_GRACE_MS:
+			if OS.is_process_running(process_id):
+				missing_process_polls = 0
+			else:
+				missing_process_polls += 1
+				if missing_process_polls >= 4:
+					return "closed before becoming ready"
+
+		status_label.text = "Waiting for %d of %d: %s (%d s)" % [
+			index + 1,
+			total,
+			entry["file_name"],
+			elapsed_ms / 1000,
+		]
+		await get_tree().create_timer(READY_POLL_SECONDS).timeout
+
+	return "startup timed out after %d s" % (timeout_ms / 1000)

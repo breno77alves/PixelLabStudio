@@ -110,7 +110,8 @@ text = "Prefix → OBS template rules"
 
 [node name="DelayLabel" type="Label" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
 layout_mode = 2
-text = "Launch interval"
+tooltip_text = "Minimum pause after one avatar is fully loaded"
+text = "Gap after ready"
 
 [node name="DelaySpin" type="SpinBox" parent="Margin/Panel/ContentMargin/Content/RulesHeader"]
 unique_name_in_owner = true

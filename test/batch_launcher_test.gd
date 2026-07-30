@@ -4,10 +4,14 @@ const BatchLauncher = preload("../autoload/batch_launcher.gd")
 
 var _failures: Array[String] = []
 var _test_root := ""
+var _ready_test_root := ""
 
 
 func _initialize() -> void:
 	_test_root = "user://batch_launcher_test_%d_%d" % [
+		OS.get_process_id(), Time.get_ticks_usec()
+	]
+	_ready_test_root = "user://batch_runs/batch_launcher_test_%d_%d" % [
 		OS.get_process_id(), Time.get_ticks_usec()
 	]
 
@@ -16,6 +20,9 @@ func _initialize() -> void:
 	_test_normalizes_invalid_configuration()
 	_test_scans_only_save_files_and_resolves_templates()
 	_test_stable_label_comes_from_filename()
+	_test_builds_a_child_request_with_a_ready_signal()
+	_test_writes_a_ready_marker_atomically()
+	_test_rejects_a_ready_marker_outside_batch_runs()
 
 	_cleanup_test_root()
 	if _failures.is_empty():
@@ -33,6 +40,7 @@ func _test_parses_batch_user_arguments() -> void:
 		"--avatar=H:/Avatar Files/Corpo_base.save",
 		"--template=CorpoGravacao",
 		"--window-label=Corpo_base",
+		"--batch-ready-file=H:/Ready Signals/002.ready",
 		"--read-only-session",
 	]))
 
@@ -43,6 +51,11 @@ func _test_parses_batch_user_arguments() -> void:
 	)
 	_assert_equal(parsed["template_name"], "CorpoGravacao", "parses template name")
 	_assert_equal(parsed["window_label"], "Corpo_base", "parses stable window label")
+	_assert_equal(
+		parsed["ready_file_path"],
+		"H:/Ready Signals/002.ready",
+		"parses the child readiness path"
+	)
 	_assert_equal(parsed["read_only_session"], true, "parses read-only mode")
 
 
@@ -79,6 +92,11 @@ func _test_normalizes_invalid_configuration() -> void:
 		normalized["launch_delay_ms"],
 		BatchLauncher.MAX_LAUNCH_DELAY_MS,
 		"clamps an excessive launch delay"
+	)
+	_assert_equal(
+		normalized["startup_timeout_ms"],
+		BatchLauncher.DEFAULT_STARTUP_TIMEOUT_MS,
+		"adds a conservative startup timeout to older configurations"
 	)
 	_assert_equal(normalized["rules"].size(), 1, "drops incomplete rules")
 	_assert_equal(
@@ -129,6 +147,68 @@ func _test_stable_label_comes_from_filename() -> void:
 	)
 
 
+func _test_builds_a_child_request_with_a_ready_signal() -> void:
+	var arguments := BatchLauncher.child_arguments({
+		"path": "H:/Avatar Files/Corpo_base.save",
+		"template_name": "CorpoGravacao",
+		"label": "Corpo_base",
+	}, "H:/Ready Signals/002.ready", "H:/Ready Signals/002.log")
+
+	_assert_equal(arguments[0], "--log-file", "gives each child an isolated engine log")
+	_assert_equal(
+		arguments[1],
+		"H:/Ready Signals/002.log",
+		"uses the requested isolated log path"
+	)
+	_assert_equal(arguments[2], "--", "separates engine and user arguments")
+	_assert_equal(
+		arguments.has("--batch-ready-file=H:/Ready Signals/002.ready"),
+		true,
+		"passes a unique readiness path to the child"
+	)
+	_assert_equal(
+		arguments.has("--read-only-session"),
+		true,
+		"keeps batch children read-only"
+	)
+
+
+func _test_writes_a_ready_marker_atomically() -> void:
+	var ready_path := ProjectSettings.globalize_path(
+		_ready_test_root.path_join("003.ready")
+	)
+	var write_error := BatchLauncher.write_ready_marker(
+		ready_path,
+		{"avatar": "Corpo_base.save"}
+	)
+	_assert_equal(write_error, OK, "writes a readiness marker")
+	_assert_equal(FileAccess.file_exists(ready_path), true, "publishes the final marker")
+	_assert_equal(
+		FileAccess.file_exists(ready_path + ".tmp"),
+		false,
+		"does not leave a partial marker"
+	)
+
+
+func _test_rejects_a_ready_marker_outside_batch_runs() -> void:
+	var unsafe_path := ProjectSettings.globalize_path(
+		_test_root.path_join("not-allowed.ready")
+	)
+	DirAccess.remove_absolute(unsafe_path)
+	var write_error := BatchLauncher.write_ready_marker(unsafe_path, {})
+
+	_assert_equal(
+		write_error,
+		ERR_INVALID_PARAMETER,
+		"rejects a readiness marker outside the private batch directory"
+	)
+	_assert_equal(
+		FileAccess.file_exists(unsafe_path),
+		false,
+		"does not write an unsafe readiness marker"
+	)
+
+
 func _write_text(path: String, contents: String) -> void:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
@@ -140,6 +220,10 @@ func _write_text(path: String, contents: String) -> void:
 
 func _cleanup_test_root() -> void:
 	var absolute_root := ProjectSettings.globalize_path(_test_root)
+	var absolute_ready_root := ProjectSettings.globalize_path(_ready_test_root)
+	DirAccess.remove_absolute(absolute_ready_root.path_join("003.ready"))
+	DirAccess.remove_absolute(absolute_ready_root)
+	DirAccess.remove_absolute(absolute_root.path_join("not-allowed.ready"))
 	DirAccess.remove_absolute(absolute_root.path_join("nested").path_join("Corpo_nested.save"))
 	DirAccess.remove_absolute(absolute_root.path_join("nested"))
 	for name in ["Busto_base.save", "Corpo_base.SAVE", "notes.txt"]:

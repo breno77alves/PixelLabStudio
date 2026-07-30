@@ -313,6 +313,23 @@ func _run_batch_avatar_request() -> void:
 	await get_tree().process_frame
 	var loaded := await _on_load_dialog_file_selected(avatar_path, false)
 	if loaded:
+		var ready_file_path := str(
+			_batch_arguments.get("ready_file_path", "")
+		)
+		if not ready_file_path.is_empty():
+			var ready_error := BatchLauncherUtil.write_ready_marker(
+				ready_file_path,
+				{
+					"avatar": avatar_path,
+					"template": template_name,
+					"title": get_window().title,
+					"process_id": OS.get_process_id(),
+				}
+			)
+			if ready_error != OK:
+				push_error(
+					"Could not publish batch readiness marker: %s" % ready_error
+				)
 		print(
 			"BATCH_READY|avatar=%s|template=%s|title=%s" % [
 				avatar_path,
@@ -394,8 +411,10 @@ func _prewarm_blend_shader():
 	warm.position = Vector2.ZERO
 	await get_tree().process_frame
 	await get_tree().process_frame
-	warm.queue_free()
-	bbc.queue_free()
+	if is_instance_valid(warm):
+		warm.queue_free()
+	if is_instance_valid(bbc):
+		bbc.queue_free()
 
 func _style_control_sliders():
 	# White circle grabber (20x20, radius ~8)

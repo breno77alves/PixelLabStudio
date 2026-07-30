@@ -16,20 +16,23 @@ The exported application accepts user arguments after Godot's `--` separator:
 
 ```text
 PixelLabStudio.exe -- --batch-launcher
-PixelLabStudio.exe -- --avatar=<absolute path> --template=<name> \
-  --window-label=<label> --read-only-session
+PixelLabStudio.exe --log-file <unique log> -- --avatar=<absolute path> \
+  --template=<name> --window-label=<label> \
+  --batch-ready-file=<unique marker> --read-only-session
 ```
 
 Batch child sessions read the normal settings and templates but never write
 `settings.pngtp`, `session.pngtp`, `lastAvatar`, or persistent window size.
-Manual sessions preserve their existing behavior.
+Manual sessions preserve their existing behavior. Each batch child writes to
+its own engine log and atomically publishes a readiness marker only after its
+template and avatar finish loading.
 
 ## Launcher Configuration
 
 `user://batch_launcher.json` stores a versioned folder, selected filenames,
-launch delay, and prefix-to-template rules. Matching is case-insensitive and
-the longest matching prefix wins. Invalid, unmatched, or missing files are
-skipped with an explicit status.
+post-ready delay, startup timeout, and prefix-to-template rules. Matching is
+case-insensitive and the longest matching prefix wins. Invalid, unmatched, or
+missing files are skipped with an explicit status.
 
 The launcher scans only the selected folder, sorts `.save` files
 case-insensitively, defaults new valid files to selected, and deduplicates
@@ -40,13 +43,16 @@ absolute paths.
 Use responsive Godot `Control` containers, one scrollable file list, editable
 rule rows, meaningful empty/error/progress states, and keyboard-focusable
 native controls. A normal app button and a colocated `.bat` open the dedicated
-launcher mode. The launcher closes after every selected process starts; it
-stays open when any launch fails.
+launcher mode. Children start sequentially: the launcher waits for one avatar
+to become ready before starting the next. It closes after every selected child
+confirms readiness and stays open with the filename and reason when any child
+exits early or times out.
 
 ## Testing Strategy
 
 - Pure tests cover argument parsing, rule priority, config normalization,
-  file selection, and stable labels.
+  file selection, stable labels, isolated child arguments, and atomic ready
+  markers.
 - Integration tests cover read-only settings behavior and session-only
   template application.
 - Existing hotkey, responsive layout, scene template, and instance identity
